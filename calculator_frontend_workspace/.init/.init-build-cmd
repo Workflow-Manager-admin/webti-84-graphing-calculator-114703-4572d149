@@ -1,0 +1,4 @@
+{
+    "command": "npm install && npx tsc --noEmit && npm test -- --ci",
+    "working_directory": "/home/kavia/workspace/code-generation/webti-84-graphing-calculator-114703-4572d149/calculator_frontend_workspace/calculator_frontend"
+}
