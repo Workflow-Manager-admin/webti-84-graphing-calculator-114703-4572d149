@@ -28,37 +28,153 @@ function CalculatorDisplay({ value }) {
   );
 }
 
-// PUBLIC_INTERFACE
+/**
+ * PUBLIC_INTERFACE
+ * TI-84 Keypad with dynamic layouts based on contextual state (2nd, Alpha, etc).
+ * This version adds an "x" button and mimics a TI-84's contextual key changing for 2nd, Alpha, Mode.
+ */
 function TI84Keypad({ onKeyPress }) {
-  /**
-   * TI-84 style keypad layout; emits button values via onKeyPress.
-   * This is a public function.
-   */
-  const keys = [
-    ["2nd", "Mode", "Del", "Alpha"],
-    ["7", "8", "9", "/"],
-    ["4", "5", "6", "*"],
-    ["1", "2", "3", "-"],
-    ["0", ".", "(-)", "+"],
-    ["Y=", "(", ")", "Graph"],
-    ["sin", "cos", "tan", "^"],
-    ["ln", "log", "sqrt", "="],
+  // States for modes: second (2nd), alpha, and mode
+  const [secondActive, setSecondActive] = useState(false);
+  const [alphaActive, setAlphaActive] = useState(false);
+  const [modeActive, setModeActive] = useState(false);
+
+  // Base keypad definitions: [primary key, 2nd function, alpha function]
+  const keypadDefs = [
+    [
+      // Key labels: [Primary, 2nd Label, Alpha Label, (optional) Mode Label]
+      { base: "2nd", alt: "2nd", alpha: "2nd" }, // Self toggle
+      { base: "Mode", alt: "Mode", alpha: "Mode" }, // Self toggle
+      { base: "Del", alt: "Ins", alpha: "Del" },
+      { base: "Alpha", alt: "Alpha", alpha: "Alpha" }, // Self toggle
+    ],
+    [
+      { base: "7", alt: "u", alpha: "A" },
+      { base: "8", alt: "v", alpha: "B" },
+      { base: "9", alt: "w", alpha: "C" },
+      { base: "/", alt: "n/d", alpha: "/" },
+    ],
+    [
+      { base: "4", alt: "r", alpha: "D" },
+      { base: "5", alt: "s", alpha: "E" },
+      { base: "6", alt: "t", alpha: "F" },
+      { base: "*", alt: "×10^", alpha: "*" },
+    ],
+    [
+      { base: "1", alt: "q", alpha: "G" },
+      { base: "2", alt: "p", alpha: "H" },
+      { base: "3", alt: "o", alpha: "I" },
+      { base: "-", alt: "Ans", alpha: "-" },
+    ],
+    [
+      { base: "0", alt: "θ", alpha: "J" },
+      { base: ".", alt: "EE", alpha: "K" },
+      { base: "(-)", alt: "π", alpha: "L" },
+      { base: "+", alt: "Rnd", alpha: "+" },
+    ],
+    [
+      { base: "Y=", alt: "Window", alpha: "Y=" },
+      { base: "(", alt: "[", alpha: "M" },
+      { base: ")", alt: "]", alpha: "N" },
+      { base: "Graph", alt: "Table", alpha: "Graph" },
+    ],
+    [
+      { base: "sin", alt: "sin⁻¹", alpha: "sin" },
+      { base: "cos", alt: "cos⁻¹", alpha: "cos" },
+      { base: "tan", alt: "tan⁻¹", alpha: "tan" },
+      { base: "^", alt: "√", alpha: "^" },
+    ],
+    [
+      { base: "ln", alt: "eˣ", alpha: "ln" },
+      { base: "log", alt: "10ˣ", alpha: "log" },
+      { base: "sqrt", alt: "x²", alpha: "x" }, // Here, alpha gives us the "x" variable
+      { base: "=", alt: "Sto→", alpha: "=" },
+    ],
   ];
+
+  // Helper to get visible label based on state
+  function getLabel(def) {
+    if (alphaActive) return def.alpha ? def.alpha : def.base;
+    if (secondActive) return def.alt ? def.alt : def.base;
+    return def.base;
+  }
+
+  // Handler for key click (toggles for special keys, passes proper value for others)
+  function handleButtonClick(def) {
+    const mainLabel = def.base;
+
+    // Special button handlers
+    if (mainLabel === "2nd") {
+      setSecondActive((val) => !val);
+      setAlphaActive(false);
+      setModeActive(false);
+      return;
+    }
+    if (mainLabel === "Alpha") {
+      setAlphaActive((val) => !val);
+      setSecondActive(false);
+      setModeActive(false);
+      return;
+    }
+    if (mainLabel === "Mode") {
+      setModeActive((val) => !val); // You may define a special mode keypad layout if needed
+      setSecondActive(false);
+      setAlphaActive(false);
+      return;
+    }
+
+    // "Del" key (could be context-sensitive, e.g., "Ins" in 2nd mode)
+    if (mainLabel === "Del" && secondActive) {
+      onKeyPress("Ins");
+      setSecondActive(false);
+      return;
+    }
+
+    // "sqrt" key when alpha is pressed → 'x'
+    if (mainLabel === "sqrt" && alphaActive) {
+      onKeyPress("x");
+      setAlphaActive(false);
+      return;
+    }
+
+    // Normal key (returns the correct contextual label)
+    const val = getLabel(def);
+
+    // After entering a normal key, reset 2nd or alpha mode
+    if (alphaActive || secondActive) {
+      onKeyPress(val);
+      setAlphaActive(false);
+      setSecondActive(false);
+    } else {
+      onKeyPress(val);
+    }
+  }
+
+  // For Mode button, optionally switch to a special mode layout
+  // For simplicity, no alternative layout implemented for Mode, but state can be used in future
+  // You can expand this with a "modeDefs" if needed
 
   return (
     <div className="calc-keypad" role="group" aria-label="Calculator keypad">
-      {keys.map((row, rowIdx) => (
-        <div key={rowIdx} className="keypad-row">
-          {row.map((key) => (
+      {keypadDefs.map((row, rIdx) => (
+        <div key={`row-${rIdx}`} className="keypad-row">
+          {row.map((def, cIdx) => (
             <button
-              key={key}
+              key={getLabel(def) + cIdx}
               className="keypad-btn"
-              onClick={() => onKeyPress(key)}
+              onClick={() => handleButtonClick(def)}
               type="button"
               tabIndex={0}
-              aria-label={key}
+              aria-label={getLabel(def)}
+              style={
+                (def.base === "2nd" && secondActive) ||
+                (def.base === "Alpha" && alphaActive) ||
+                (def.base === "Mode" && modeActive)
+                  ? { background: "#ffc107", color: "#212121", fontWeight: "bold" }
+                  : {}
+              }
             >
-              {key}
+              {getLabel(def)}
             </button>
           ))}
         </div>
@@ -316,20 +432,37 @@ function App() {
 
   // Handle input from keypad
   function handleKeypad(key) {
-    // Handle calculator and equation keys
+    // Handle calculator and equation keys, including contextual ones (like "x")
     if (key === "Del") {
       setEquation((eq) => eq.slice(0, -1));
+    } else if (key === "Ins") {
+      // Optional: Insert dummy space, or implement insert cursor action
     } else if (key === "=" || key === "Graph" || key === "Plot") {
       handleEquationSubmit();
     } else if (key === "Y=") {
       setEquation("y=");
     } else if (key === "(-)") {
       setEquation((eq) => eq + "-");
-    } else if (["sin", "cos", "tan", "ln", "log", "sqrt"].includes(key)) {
-      setEquation((eq) => eq + key + "(");
-    } else if ("0123456789.+-*/^()".includes(key) || /^[A-Za-z]$/.test(key)) {
+    } else if (["sin", "cos", "tan", "ln", "log", "sqrt", "sin⁻¹", "cos⁻¹", "tan⁻¹", "eˣ", "10ˣ", "π", "θ", "EE", "Rnd", "Ans", "Sto→", "x²", "√", "×10^", "n/d"].includes(key)) {
+      // Functions with parentheses:
+      if (
+        [
+          "sin", "cos", "tan", "sin⁻¹", "cos⁻¹", "tan⁻¹", "ln", "log", "sqrt", "eˣ", "10ˣ"
+        ].includes(key)
+      ) {
+        setEquation((eq) => eq + key + "(");
+      } else if (key === "x²") {
+        setEquation((eq) => eq + "^2");
+      } else {
+        setEquation((eq) => eq + key);
+      }
+    } else if (
+      "0123456789.+-*/^()".includes(key) || key === "x" ||
+      /^[A-Za-z]$/.test(key)
+    ) {
       setEquation((eq) => eq + key);
-    } // ignore other special keys for now (Mode, Alpha, 2nd)
+    }
+    // Mode, Alpha, 2nd do not directly add text, they are handled by the keypad state
   }
 
   // On submit: try to plot and add to log
