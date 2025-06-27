@@ -432,7 +432,7 @@ function App() {
 
   // Handle input from keypad
   function handleKeypad(key) {
-    // Handle calculator and equation keys, including contextual ones (like "x")
+    // Support for arithmetic evaluation (when not a "y=" graphing equation)
     if (key === "Del") {
       setEquation((eq) => eq.slice(0, -1));
     } else if (key === "Ins") {
@@ -465,12 +465,49 @@ function App() {
     // Mode, Alpha, 2nd do not directly add text, they are handled by the keypad state
   }
 
-  // On submit: try to plot and add to log
+  // Evaluates basic arithmetic safely for numbers only (no variables)
+  function safeEval(expr) {
+    try {
+      // Only allow numbers, operators, decimal, and parentheses
+      if (!/^[0-9+\-*/().\s^]+$/.test(expr)) return null;
+      // Convert ^ to ** for JS evaluation
+      // eslint-disable-next-line no-eval
+      // Limit: Don't eval if it contains alpha variables (e.g. x), only arithmetic
+      if (/[A-Za-z]/.test(expr)) return null;
+      // Replace ^ with ** for exponentiation
+      const jsExpr = expr.replace(/\^/g, "**");
+      // eslint-disable-next-line no-eval
+      const result = eval(jsExpr);
+      if (typeof result === "number" && isFinite(result)) {
+        return result;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  // On submit: handle arithmetic or graph equation, and store in history
   function handleEquationSubmit() {
-    if (!equation.trim().toLowerCase().startsWith("y=")) return;
-    setHistory([{ equation, result: "" }, ...history.slice(0, 24)]); // keep only last 25
-    setEquationsToPlot([equation]);
-    setDisplayValue(equation);
+    const trimmed = equation.trim();
+    if (trimmed.length === 0) return;
+    if (trimmed.toLowerCase().startsWith("y=")) {
+      setHistory([{ equation, result: "" }, ...history.slice(0, 24)]); // keep only last 25
+      setEquationsToPlot([equation]);
+      setDisplayValue(equation);
+    } else {
+      // Try arithmetic evaluation
+      const res = safeEval(trimmed);
+      let resultDisplay = "";
+      if (res !== null) {
+        resultDisplay = res.toString();
+      } else {
+        resultDisplay = "Error";
+      }
+      setHistory([{ equation, result: resultDisplay }, ...history.slice(0, 24)]);
+      setEquationsToPlot([]); // Don't plot arithmetic
+      setDisplayValue(resultDisplay);
+    }
   }
 
   // On selecting from history, re-set the equation
@@ -484,12 +521,31 @@ function App() {
     setEquation(val);
   }
 
+  // Show either arithmetic result, current editing value, or last equation depending on mode
+  // If arithmetic result (displayValue) and input box not actively being edited (for arithmetic), show result
+  // If in equation entry mode, show current equation or "0"
+  // If just graphed, show equation just graphed
+  // If just evaluated arithmetic, show result
+
+  // Determine what to show in the calculator display:
+  // Show arithmetic result after evaluation, else current equation (while editing), else last graphed equation
+  let toDisplay;
+  if (displayValue && displayValue !== equation && displayValue !== "0") {
+    // When displayValue is a number/string, after arithmetic
+    toDisplay = displayValue;
+  } else if (equation) {
+    // While editing or after entering new equation
+    toDisplay = equation;
+  } else {
+    toDisplay = "0";
+  }
+
   return (
     <div className="App">
       <ThemeToggle theme={theme} toggleTheme={toggleTheme} />
       <main className="main-calc-graph">
         <section className="calculator-panel">
-          <CalculatorDisplay value={displayValue || equation} />
+          <CalculatorDisplay value={toDisplay} />
           <EquationInput
             equation={equation}
             onEquationChange={handleEquationInputChange}
